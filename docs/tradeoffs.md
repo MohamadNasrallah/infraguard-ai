@@ -42,3 +42,12 @@ Three attempts covers transient network glitches and container-restart races wit
 
 **Degraded mode: DB optional at startup**
 If `DATABASE_URL` is empty or Postgres is unreachable, EEP starts and serves requests without a DB pool. In degraded mode, `/run` still returns a valid response (the pipeline still calls IEPs); `/status` and `/reports` return 503. This allows running the stack locally without Postgres for quick iteration. The tradeoff is that data is silently not persisted — degraded mode is development-only and must not reach production.
+
+## Combined Test Run Cross-Contamination
+
+Running all 4 test suites in a single pytest process causes sys.path
+collisions between identically-named modules (main, db, schemas) across
+services. Each suite passes fully in isolation (11+6+8+8 = 33 tests).
+CI runs them per-service, not combined. Fix would require namespace
+packages or separate virtual environments per service — unnecessary
+complexity for this project scope.

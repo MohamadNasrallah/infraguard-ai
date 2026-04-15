@@ -15,6 +15,7 @@ from typing import Any
 
 import asyncpg
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from schemas import ClusterRequest, ClusterResponse, Hotspot
 
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 
 app = FastAPI(title="IEP2 — Hotspot Clustering", lifespan=lifespan)
+Instrumentator().instrument(app).expose(app)
 
 
 async def _persist_hotspots(run_id: str, hotspots: list[Hotspot]) -> None:

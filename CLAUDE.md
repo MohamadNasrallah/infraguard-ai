@@ -268,20 +268,20 @@ Grafana dashboards in `infra/monitoring/grafana/dashboards/` — one per service
 
 | Component | Location | Status |
 |---|---|---|
-| Architecture diagram | `docs/architecture.md` | |
-| Tradeoffs documented | `docs/tradeoffs.md` | done |
-| Unit tests | `*/tests/` | done |
-| Integration tests | `.github/workflows/integration.yml` | done |
-| E2E tests | `tests/e2e/` | |
-| LLM golden tests | `iep3/tests/golden/` | |
-| MLOps pipeline | `mlops/`, `mlops/promotion_logic.py` | |
-| Docker | `*/Dockerfile`, `infra/docker-compose.yml` | done |
-| Kubernetes | `infra/k8s/` | done |
-| CI/CD | `.github/workflows/` | done (ci.yml, integration.yml, deploy.yml) |
-| Observability | `infra/monitoring/` | |
-| Failure handling | `eep/app/orchestrator.py` | done |
-| Prompt versioning | `iep3/prompts/` | done |
-| Grading map | `readme_correction.md` | |
+| Architecture diagram | docs/architecture.md | done |
+| Tradeoffs documented | docs/tradeoffs.md | done |
+| Unit tests | */tests/ | done |
+| Integration tests | .github/workflows/integration.yml | done |
+| E2E tests | tests/e2e/test_e2e.py | done |
+| LLM golden tests | iep3/tests/golden/test_golden.py | done |
+| MLOps pipeline | mlops/promotion_logic.py, mlops/mlflow/ | done |
+| Docker | */Dockerfile, infra/docker-compose.yml | done |
+| Kubernetes | infra/k8s/ | done |
+| CI/CD | .github/workflows/ | done |
+| Observability | infra/monitoring/, all service main.py | done |
+| Failure handling | eep/app/orchestrator.py | done |
+| Prompt versioning | iep3/prompts/, iep3/app/prompt_manager.py | done |
+| Grading map | readme_correction.md | done |
 
 ---
 
@@ -316,7 +316,7 @@ Grafana dashboards in `infra/monitoring/grafana/dashboards/` — one per service
 
 ## Current Status
 
-**Active phase:** Phase 3 — Frontend Dashboard
+**Active phase:** Phase 3 — Frontend Dashboard (next)
 
 ### Completed
 
@@ -408,20 +408,34 @@ All Phase 1 components are done.
 
 **Phase 3 — Frontend Dashboard**
 - Single-page dashboard (map, reports list, trigger button, health panel)
+- Built with React or plain HTML/JS
 
 **Phase 4 — Model Integration**
-- Real YOLO + DeepSORT in `iep1/app/detector.py` / `iep1/app/tracker.py`
-- Real ST-DBSCAN in `iep2/app/clustering.py`
-- Real LLM call + ReportLab PDF in `iep3/app/report_generator.py` / `iep3/app/pdf_builder.py`
+- Real YOLO + DeepSORT in iep1/app/detector.py / iep1/app/tracker.py
+- Real ST-DBSCAN in iep2/app/clustering.py
+- Real LLM call + ReportLab PDF in iep3/app/report_generator.py / iep3/app/pdf_builder.py
+
+### Completed (Step 6)
 
 **Observability**
-- `/metrics` endpoints (Prometheus) on all services
-- `infra/monitoring/prometheus.yml` and Grafana dashboards
-
-**MLOps**
-- `mlops/mlflow/` — MLflow tracking server config
-- `mlops/promotion_logic.py` — model metric thresholds + promotion logic
+- prometheus-fastapi-instrumentator wired into all 4 service main.py files
+- /metrics endpoint live on all services
+- infra/monitoring/prometheus.yml — scrape configs for all 4 services
+- infra/monitoring/grafana/dashboards/infraguard.json — 4 panels: title, request rate, P95 latency, error rate
+- Prometheus + Grafana + MLflow added to infra/docker-compose.yml
 
 **Tests**
-- `tests/e2e/` — end-to-end test hitting deployed pipeline
-- `iep3/tests/golden/` — golden tests asserting report sections present
+- iep3/tests/golden/test_golden.py — 4 golden tests: 3 section header assertions + 1 endpoint test
+- tests/e2e/test_e2e.py — E2E test with pytest.mark.e2e, polls /status/{run_id} up to 10 times
+- conftest.py added to all 4 service test dirs + iep3/tests/golden/ + tests/e2e/
+- --import-mode=importlib added to pyproject.toml
+
+**MLOps**
+- mlops/promotion_logic.py — full MLflow promotion logic (map50 + f1 thresholds)
+- mlops/requirements.txt — mlflow==2.14.1
+- mlops/mlflow/mlflow.env — env vars for tracking URI, model name, thresholds
+
+**Docs**
+- docs/architecture.md — ASCII system diagram, component table, data flow, failure handling, CI/CD pipeline
+- readme_correction.md — 14-row rubric → file mapping table
+- docs/tradeoffs.md — includes combined pytest cross-contamination tradeoff

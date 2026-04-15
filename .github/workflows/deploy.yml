@@ -1,0 +1,61 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build, Push, and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images
+        run: |
+          REGISTRY=ghcr.io/${{ github.repository_owner }}
+          for service in eep iep1 iep2 iep3; do
+            docker build -t "${REGISTRY}/infraguard-${service}:latest" ./${service}
+            docker push "${REGISTRY}/infraguard-${service}:latest"
+          done
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f infra/k8s/postgres-deployment.yaml
+          kubectl apply -f infra/k8s/services/
+          kubectl apply -f infra/k8s/iep1-deployment.yaml
+          kubectl apply -f infra/k8s/iep2-deployment.yaml
+          kubectl apply -f infra/k8s/iep3-deployment.yaml
+          kubectl apply -f infra/k8s/eep-deployment.yaml
+
+      - name: Wait for rollout
+        run: |
+          for deploy in eep iep1 iep2 iep3; do
+            kubectl rollout status deployment/${deploy} \
+              --namespace infraguard --timeout=120s
+          done

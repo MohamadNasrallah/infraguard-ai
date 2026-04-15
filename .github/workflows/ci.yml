@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  lint:
+    name: Ruff Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Run ruff
+        run: ruff check eep/ iep1/ iep2/ iep3/
+
+  test:
+    name: Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: pip install fastapi uvicorn pytest httpx pydantic
+      - name: Test eep
+        run: cd eep/app && pytest tests/ -v
+      - name: Test iep1
+        run: cd iep1/app && pytest tests/ -v
+      - name: Test iep2
+        run: cd iep2/app && pytest tests/ -v
+      - name: Test iep3
+        run: cd iep3/app && pytest tests/ -v
+
+  docker-build:
+    name: Docker Build (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [eep, iep1, iep2, iep3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.service }}
+        run: docker build -t infraguard-${{ matrix.service }}:ci ./${{ matrix.service }}

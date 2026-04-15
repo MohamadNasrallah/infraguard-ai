@@ -1,1 +1,52 @@
-# placeholder
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eep
+  namespace: infraguard
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eep
+  template:
+    metadata:
+      labels:
+        app: eep
+    spec:
+      containers:
+        - name: eep
+          image: ghcr.io/${{ github.repository_owner }}/infraguard-eep:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: infraguard-db-secret
+                  key: DATABASE_URL
+            - name: IEP1_URL
+              value: http://iep1:8000
+            - name: IEP2_URL
+              value: http://iep2:8000
+            - name: IEP3_URL
+              value: http://iep3:8000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10

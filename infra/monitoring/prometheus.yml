@@ -1,1 +1,19 @@
-# placeholder
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: eep
+    static_configs:
+      - targets: ["eep:8000"]
+
+  - job_name: iep1
+    static_configs:
+      - targets: ["iep1:8001"]
+
+  - job_name: iep2
+    static_configs:
+      - targets: ["iep2:8002"]
+
+  - job_name: iep3
+    static_configs:
+      - targets: ["iep3:8003"]

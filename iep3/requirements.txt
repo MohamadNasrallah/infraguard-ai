@@ -1,1 +1,4 @@
-# placeholder
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+asyncpg==0.29.0
+prometheus-fastapi-instrumentator==6.1.0

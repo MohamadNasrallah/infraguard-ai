@@ -1,1 +1,99 @@
-# placeholder
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: infraguard
+      POSTGRES_PASSWORD: infraguard
+      POSTGRES_DB: infraguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infraguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  eep:
+    build: ../eep
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://infraguard:infraguard@postgres:5432/infraguard
+      IEP1_URL: http://iep1:8000
+      IEP2_URL: http://iep2:8000
+      IEP3_URL: http://iep3:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      iep1:
+        condition: service_started
+      iep2:
+        condition: service_started
+      iep3:
+        condition: service_started
+
+  iep1:
+    build: ../iep1
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: postgresql://infraguard:infraguard@postgres:5432/infraguard
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  iep2:
+    build: ../iep2
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql://infraguard:infraguard@postgres:5432/infraguard
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  iep3:
+    build: ../iep3
+    ports:
+      - "8004:8000"
+    environment:
+      DATABASE_URL: postgresql://infraguard:infraguard@postgres:5432/infraguard
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - eep
+      - iep1
+      - iep2
+      - iep3
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.14.1
+    ports:
+      - "5000:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000
+    volumes:
+      - mlflow_data:/mlflow
+
+volumes:
+  postgres_data:
+  grafana_data:
+  mlflow_data:

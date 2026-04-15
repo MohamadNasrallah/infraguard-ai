@@ -1,0 +1,71 @@
+# EEP — LoadBalancer so it is reachable externally on EKS
+apiVersion: v1
+kind: Service
+metadata:
+  name: eep
+  namespace: infraguard
+spec:
+  type: LoadBalancer
+  selector:
+    app: eep
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+---
+# IEP services — ClusterIP, internal only (called by EEP inside the cluster)
+apiVersion: v1
+kind: Service
+metadata:
+  name: iep1
+  namespace: infraguard
+spec:
+  type: ClusterIP
+  selector:
+    app: iep1
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iep2
+  namespace: infraguard
+spec:
+  type: ClusterIP
+  selector:
+    app: iep2
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iep3
+  namespace: infraguard
+spec:
+  type: ClusterIP
+  selector:
+    app: iep3
+  ports:
+    - port: 8000
+      targetPort: 8000
+
+---
+# Postgres — ClusterIP, accessible only inside the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: infraguard
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

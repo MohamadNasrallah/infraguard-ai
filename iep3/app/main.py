@@ -16,6 +16,7 @@ from typing import Any
 
 import asyncpg
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from prompt_manager import load_prompt
 from schemas import GenerateRequest, GenerateResponse
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 
 app = FastAPI(title="IEP3 — Report Generation", lifespan=lifespan)
+Instrumentator().instrument(app).expose(app)
 
 
 async def _persist_report(run_id: str, pdf_url: str) -> None:

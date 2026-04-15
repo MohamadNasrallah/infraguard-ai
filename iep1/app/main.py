@@ -16,6 +16,7 @@ from typing import Any
 
 import asyncpg
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from schemas import ProcessRequest, ProcessResponse, ViolationEvent
 
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 
 app = FastAPI(title="IEP1 — Violation Detection", lifespan=lifespan)
+Instrumentator().instrument(app).expose(app)
 
 
 async def _persist_events(run_id: str, events: list[ViolationEvent]) -> None:

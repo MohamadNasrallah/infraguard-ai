@@ -17,6 +17,7 @@ import httpx
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, HTTPException
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
 import db
@@ -68,6 +69,7 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
 
 
 app = FastAPI(title="EEP — InfraGuard Orchestrator", lifespan=lifespan)
+Instrumentator().instrument(app).expose(app)
 
 
 # ---------------------------------------------------------------------------

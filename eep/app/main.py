@@ -41,8 +41,10 @@ def _run_migrations() -> None:
     approach.  The DATABASE_URL env var is picked up inside env.py.
     """
     cfg_path = os.path.join(os.path.dirname(__file__), "alembic.ini")
+    print(f"[EEP] Running migrations from config: {cfg_path}")
     alembic_cfg = AlembicConfig(cfg_path)
     alembic_command.upgrade(alembic_cfg, "head")
+    print("[EEP] Migrations completed successfully")
 
 
 # ---------------------------------------------------------------------------
@@ -139,16 +141,20 @@ async def run_pipeline(body: RunRequest) -> Any:
         # No DB available (e.g. local dev without Postgres).
         pass
 
+    print(f"[EEP] Attempting DB insert for run_id: {run_id}")
     if pool is not None:
-        await pool.execute(
-            """
-            INSERT INTO pipeline_runs (id, status, video_path, started_at)
-            VALUES ($1, 'RUNNING', $2, $3)
-            """,
-            run_id,
-            body.video_path,
-            now,
-        )
+        try:
+            await pool.execute(
+                """
+                INSERT INTO pipeline_runs (id, status, video_path, started_at)
+                VALUES ($1, 'RUNNING', $2, $3)
+                """,
+                run_id,
+                body.video_path,
+                now,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[EEP] DB insert warning (pipeline_runs RUNNING): {exc}")
 
     try:
         async with httpx.AsyncClient() as client:
@@ -157,40 +163,46 @@ async def run_pipeline(body: RunRequest) -> Any:
             pdf_url = await call_iep3(client, IEP3_URL, run_id, hotspots, events)
     except PipelineStepError as exc:
         if pool is not None:
-            await pool.execute(
-                """
-                UPDATE pipeline_runs
-                SET status = 'FAILED', completed_at = $1
-                WHERE id = $2
-                """,
-                datetime.now(timezone.utc),
-                run_id,
-            )
+            try:
+                await pool.execute(
+                    """
+                    UPDATE pipeline_runs
+                    SET status = 'FAILED', completed_at = $1
+                    WHERE id = $2
+                    """,
+                    datetime.now(timezone.utc),
+                    run_id,
+                )
+            except Exception as db_exc:  # noqa: BLE001
+                print(f"[EEP] DB update warning (pipeline_runs FAILED): {db_exc}")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     completed_at = datetime.now(timezone.utc)
 
     if pool is not None:
-        await pool.execute(
-            """
-            UPDATE pipeline_runs
-            SET status = 'DONE', completed_at = $1, pdf_url = $2
-            WHERE id = $3
-            """,
-            completed_at,
-            pdf_url,
-            run_id,
-        )
-        await pool.execute(
-            """
-            INSERT INTO reports (id, run_id, pdf_url, created_at)
-            VALUES ($1, $2, $3, $4)
-            """,
-            str(uuid.uuid4()),
-            run_id,
-            pdf_url,
-            completed_at,
-        )
+        try:
+            await pool.execute(
+                """
+                UPDATE pipeline_runs
+                SET status = 'DONE', completed_at = $1, pdf_url = $2
+                WHERE id = $3
+                """,
+                completed_at,
+                pdf_url,
+                run_id,
+            )
+            await pool.execute(
+                """
+                INSERT INTO reports (id, run_id, pdf_url, created_at)
+                VALUES ($1, $2, $3, $4)
+                """,
+                str(uuid.uuid4()),
+                run_id,
+                pdf_url,
+                completed_at,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[EEP] DB update warning (pipeline_runs DONE / reports): {exc}")
 
     return RunResponse(run_id=run_id, pdf_url=pdf_url)
 

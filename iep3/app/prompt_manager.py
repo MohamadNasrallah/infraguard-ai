@@ -10,7 +10,7 @@ Rules:
 import os
 
 # Prompts directory is two levels up from this file (iep3/prompts/)
-_PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
+_PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "prompts")
 
 
 def load_prompt(version: str | None = None) -> str:

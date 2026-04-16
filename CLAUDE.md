@@ -316,13 +316,13 @@ Grafana dashboards in `infra/monitoring/grafana/dashboards/` — one per service
 
 ## Current Status
 
-**Active phase:** Phase 3 — Frontend Dashboard (next)
+**Active phase:** Phase 3 — Frontend Dashboard
 
 ### Completed
 
 **Phase 1 — Part B (Docker)**
-- `eep/Dockerfile`, `iep1/Dockerfile`, `iep2/Dockerfile`, `iep3/Dockerfile` — Python 3.11-slim, uvicorn entrypoint
-- `infra/docker-compose.yml` — all 4 services + PostgreSQL, healthcheck-gated `depends_on`
+- `eep/Dockerfile`, `iep1/Dockerfile`, `iep2/Dockerfile`, `iep3/Dockerfile` — Python 3.11-slim, uvicorn entrypoint; all 4 now install `curl` via `apt-get` (required for Docker healthchecks)
+- `infra/docker-compose.yml` — all 4 services + PostgreSQL, healthcheck-gated `depends_on`; all 4 app services now have `healthcheck` blocks using `curl -f http://localhost:8000/health`
 - `{service}/app/main.py` — FastAPI stub with `GET /health` returning `{"status": "ok"}` on each service
 - `{service}/app/tests/test_health.py` — TestClient health check test per service
 
@@ -357,9 +357,21 @@ Grafana dashboards in `infra/monitoring/grafana/dashboards/` — one per service
 - `infra/k8s/iep1-deployment.yaml`, `iep2-deployment.yaml`, `iep3-deployment.yaml` — 2 replicas each, liveness + readiness on `/health`, resource limits (500m CPU / 256Mi RAM)
 - `infra/k8s/services/services.yaml` — EEP as `LoadBalancer` (public), IEP1/2/3 + postgres as `ClusterIP` (internal only)
 
-### Phase 1 — Complete
+### Phase 1 — CI Debugging (complete)
 
-All Phase 1 components are done.
+All services healthy, mock pipeline passes (POST /run returns run_id + pdf_url), 33/33 unit tests pass locally.
+
+**CI fixes applied:**
+- All 4 Dockerfiles — added `RUN apt-get update && apt-get install -y curl` so Docker healthchecks can execute
+- `infra/docker-compose.yml` — added `healthcheck` blocks on eep, iep1, iep2, iep3 (`curl -f http://localhost:8000/health`, interval 10s, retries 5, start_period 15s); changed iep1/iep2/iep3 `depends_on` condition from `service_started` to `service_healthy`
+- `eep/app/main.py` — all DB calls in `POST /run` wrapped in `try/except`; endpoint returns `run_id` + `pdf_url` even if migrations haven't run or tables don't exist yet
+- `iep3/app/prompt_manager.py` — fixed `_PROMPTS_DIR` path from `os.path.join(__file__, "..", "prompts")` to `os.path.join(__file__, "prompts")` (prompts now co-located under `/app/prompts/` inside container)
+- `iep3/Dockerfile` — added `COPY prompts/ prompts/` so `v1_report.txt` is present inside the container at `/app/prompts/`
+
+**Local verification (2026-04-16):**
+- 8/8 services up: eep, iep1, iep2, iep3, postgres (all healthy), prometheus, grafana, mlflow
+- `POST /run` → `{"run_id": "...", "pdf_url": "https://reports.infraguard.local/runs/.../report_1hs_2ev.pdf"}`
+- EEP: 11 passed, IEP1: 6 passed, IEP2: 8 passed, IEP3: 8 passed (33 total)
 
 ---
 

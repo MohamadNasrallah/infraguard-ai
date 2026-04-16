@@ -451,3 +451,7 @@ All services healthy, mock pipeline passes (POST /run returns run_id + pdf_url),
 - docs/architecture.md — ASCII system diagram, component table, data flow, failure handling, CI/CD pipeline
 - readme_correction.md — 14-row rubric → file mapping table
 - docs/tradeoffs.md — includes combined pytest cross-contamination tradeoff
+
+### Completed (Phase 3 — Docs)
+- README.md — rewritten with full project overview, architecture, tech stack, run instructions, CI/CD summary, repo structure, rubric checklist
+- docs/progress.md — created as engineering log covering all completed phases, decisions, challenges, and remaining work

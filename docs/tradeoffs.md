@@ -51,3 +51,30 @@ services. Each suite passes fully in isolation (11+6+8+8 = 33 tests).
 CI runs them per-service, not combined. Fix would require namespace
 packages or separate virtual environments per service — unnecessary
 complexity for this project scope.
+
+## Service-level model isolation
+
+Each IEP is its own Docker image, compose service, and Kubernetes
+deployment. The boundary is one model domain per service: IEP1 owns
+detection + tracking, IEP2 owns clustering, IEP3 owns LLM reporting,
+EEP owns orchestration. This lets each model be rebuilt, rolled out,
+and rolled back independently — a failure in the LLM path cannot
+block detection, and scaling detection up does not force clustering
+to scale with it.
+
+We do **not** split further. YOLO and DeepSORT stay inside IEP1
+because they are tightly coupled in the inference path: DeepSORT
+consumes YOLO's bounding boxes frame-by-frame, and splitting them
+across containers would force every frame's detections over the
+network for no scaling benefit at our batch workload. The same logic
+would apply to any future attempt to split IEP3's prompt loading from
+PDF rendering — co-location is correct when the data path is tight.
+
+Per-model engineering depth is delivered at the lifecycle layer,
+not by multiplying containers. `mlops/promotion_logic.py` applies
+per-model metric thresholds (YOLO mAP@0.5, F1) to promote versions
+in MLflow, and Grafana dashboards render per-service request rate,
+P95 latency, and error rate scraped from each service's `/metrics`
+endpoint. The combination — one image per model service, MLflow for
+offline lifecycle, Grafana for online behavior — covers scalability,
+deployment, and observability without container sprawl.

@@ -10,6 +10,8 @@ InfraGuard AI is a production-oriented road safety system that processes pre-rec
 
 **This is an academic project graded as a production system. Engineering depth, robustness, and evidence of real deployment matter more than feature count.**
 
+**Service-level model isolation.** Each IEP owns one model domain and ships as its own Docker image. EEP (orchestrator), IEP1 (detection/tracking), IEP2 (clustering), IEP3 (LLM/report) are four independent images. Per-model engineering depth — experiment tracking, metric dashboards, model promotion — is delivered through MLflow and Grafana rather than through further container subdivision.
+
 ---
 
 ## Pipeline Architecture
@@ -293,6 +295,31 @@ Grafana dashboards in `infra/monitoring/grafana/dashboards/` — one per service
 - API schemas (input/output) are contracts — do not change them once set
 - All tradeoff decisions must be written in `docs/tradeoffs.md` with justification
 - `readme_correction.md` must point to every rubric component by file path
+
+---
+
+## Model Isolation
+
+Each model domain is owned by exactly one service, and each service is exactly one Docker image. This is the unit of isolation that matters for scalability, deployment, and grading.
+
+| Service | Model domain | Docker image | K8s deployment |
+|---|---|---|---|
+| EEP | orchestration only (no model) | `eep` | `eep-deployment.yaml` |
+| IEP1 | computer vision (YOLO + DeepSORT) | `iep1` | `iep1-deployment.yaml` |
+| IEP2 | spatiotemporal clustering (ST-DBSCAN) | `iep2` | `iep2-deployment.yaml` |
+| IEP3 | LLM report generation | `iep3` | `iep3-deployment.yaml` |
+
+**Consequences of this boundary:**
+- Each model can be rebuilt, redeployed, and rolled back independently.
+- Each service scales independently in Kubernetes (replica count, CPU/memory limits set per deployment).
+- A failure in one model does not cascade: Kubernetes liveness probes restart only the affected pod; EEP retries with tenacity.
+- Each service has its own Dockerfile, `requirements.txt`, test suite, and CI build target — work on one model does not block work on another.
+
+**Per-model engineering depth lives in MLflow and Grafana, not in further container subdivision:**
+- **MLflow** (`mlops/`) tracks experiments, model versions, and metrics per model. `mlops/promotion_logic.py` applies per-model thresholds (e.g., YOLO mAP@0.5, F1) before promoting a model version to production. This is how each model gets its own lifecycle management without needing its own container.
+- **Grafana** (`infra/monitoring/grafana/dashboards/`) renders per-service metrics (request rate, P95 latency, error rate) scraped by Prometheus from every service's `/metrics` endpoint. Per-model runtime behavior (IEP1 events detected per run, IEP2 hotspots per run, IEP3 report generation time) is observable live.
+
+The combination — one image per model service + MLflow for offline lifecycle + Grafana for online behavior — covers scalability, deployment, and observability without multiplying container count.
 
 ---
 

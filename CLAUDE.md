@@ -416,6 +416,26 @@ All services healthy, mock pipeline passes (POST /run returns run_id + pdf_url),
 - All IEP `POST` responses now include `run_id: str` in addition to the data payload
 - `docs/tradeoffs.md` updated with all Phase 2 decisions
 
+### Completed (IEP1 — Phase 4 Integration Scaffolding)
+
+**IEP1 real-model integration prep** (`feature/iep1-integration-prep`)
+- `iep1/app/detector.py` — full YOLO + ResNet-18 state classifier; IEP1_MODE=stub guard skips all heavy imports
+- `iep1/app/tracker.py` — ByteTrack primary (ultralytics), DeepSORT fallback; all tracker imports lazy
+- `iep1/app/lane_detector.py` — UFLD wrapper with YOLO lane_line_solid/dashed bbox fallback
+- `iep1/app/violations.py` — 5 rule-based detectors (wrong_way, illegal_uturn, speeding, red_light_running, shoulder_driving) + passthrough
+- `iep1/app/pipeline.py` — top-level orchestrator; yields event dicts per frame
+- `iep1/configs/camera_config.json` — default camera config (cam_default, 0.0/0.0 GPS)
+- `iep1/models/.gitkeep` + `.gitignore` entry for `*.pt` — weights mounted at runtime, never baked into image
+- `eep/app/migrations/versions/002_add_event_location.py` — adds nullable `camera_id` column to events table
+- `iep1/app/schemas.py` — `camera_id: Optional[str] = None` added to ViolationEvent
+- `iep1/app/main.py` — IEP1_MODE env gate; `_run_real_pipeline()` with lazy import + fallback; `_conf_to_severity()` helper; stub path preserved exactly for CI
+- `iep1/requirements.txt` — ultralytics, torch, torchvision, deep-sort-realtime, opencv-python-headless, numpy added
+- `iep1/Dockerfile` — libgl1 + libglib2.0-0 apt deps; configs/ copy; models/ dir; ENV IEP1_MODE=stub
+- `infra/docker-compose.yml` — IEP1 block: volume mount for weights + 7 env vars (IEP1_MODE, IEP1_YOLO_WEIGHTS, IEP1_STATE_WEIGHTS, IEP1_CAMERA_CONFIG, IEP1_TRACKER, IEP1_CONF, IEP1_IOU)
+- `iep1/app/tests/test_process.py` — `test_process_real_mode_import_failure_falls_back_to_stub` added
+- `docs/tradeoffs.md` — IEP1 integration prep section appended
+- Service awaiting real model weights at `/app/models/infraguard_v1.pt` — set `IEP1_MODE=real` to activate
+
 ### Remaining
 
 **Phase 3 — Frontend Dashboard**
@@ -423,7 +443,7 @@ All services healthy, mock pipeline passes (POST /run returns run_id + pdf_url),
 - Built with React or plain HTML/JS
 
 **Phase 4 — Model Integration**
-- Real YOLO + DeepSORT in iep1/app/detector.py / iep1/app/tracker.py
+- Drop real YOLO weights into `iep1/models/` and set `IEP1_MODE=real` — no code changes needed
 - Real ST-DBSCAN in iep2/app/clustering.py
 - Real LLM call + ReportLab PDF in iep3/app/report_generator.py / iep3/app/pdf_builder.py
 

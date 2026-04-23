@@ -1,0 +1,58 @@
+{
+  "_description": "Per-camera config. Duplicate this file per unique camera and name by camera_id. All thresholds are paper-backed — see docs/ARCHITECTURE.md for justification.",
+
+  "camera": {
+    "camera_id": "cam_default",
+    "latitude": 0.0,
+    "longitude": 0.0,
+    "description": "Edit these values per camera. latitude/longitude are WGS84 decimal degrees. All events emitted from a video processed with this config inherit the camera's GPS as their event location."
+  },
+
+  "wrong_way": {
+    "sign_conf_threshold": 0.92,
+    "expected_heading_deg": 90,
+    "heading_tolerance_deg": 30,
+    "wrong_way_threshold_deg": 120,
+    "min_track_frames": 10,
+    "heading_window_frames": 10
+  },
+
+  "illegal_uturn": {
+    "angle_threshold_deg": 150,
+    "window_sec": 3.0,
+    "enabled_zones": null
+  },
+
+  "speeding": {
+    "speed_limit_kmh": 80,
+    "meter_per_pixel": 0.05,
+    "fps": 30,
+    "homography": null,
+    "min_track_frames": 10
+  },
+
+  "red_light_running": {
+    "stop_line": [[100, 300], [900, 310]],
+    "state_conf_threshold": 0.75,
+    "crossing_window_sec": 1.5
+  },
+
+  "shoulder_driving": {
+    "sustained_sec": 2.0,
+    "min_lane_confidence": 0.6
+  },
+
+  "tracker": {
+    "primary": "bytetrack",
+    "bytetrack_yaml": "bytetrack.yaml",
+    "fallback": "deepsort"
+  },
+
+  "_notes": {
+    "camera.latitude/longitude": "Option 1 location scheme — every event from this camera inherits these coordinates. Works for stationary cameras. For per-event GPS (Option 2), a pixel→GPS homography would be added here later and violations.py would call pixel_to_gps() per event.",
+    "sign_conf_threshold": "0.92 gate — strict enough to prevent false positives on partial/occluded signs. Lower to 0.85 if recall is low.",
+    "wrong_way_threshold_deg": "120° per Rahman et al. 2022. Literature often uses 90° but we tighten to reduce FP in urban mixed-flow zones.",
+    "homography": "3x3 matrix mapping pixel → meter world coords. If null, speed uses simple m/px × pixel-displacement. Calibrate homography per camera with 4 points on known road geometry (e.g., lane markings) for best accuracy.",
+    "stop_line": "Two pixel endpoints of the virtual stop line. Draw once per camera using an annotation tool. Set null to disable red-light detection."
+  }
+}

@@ -1,1 +1,4 @@
 # placeholder
+
+# IEP1 model weights — mount via Docker volume, never commit
+iep1/models/*.pt

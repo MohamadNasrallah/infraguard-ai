@@ -44,8 +44,17 @@ services:
     build: ../iep1
     ports:
       - "8002:8000"
+    volumes:
+      - ../iep1/models:/app/models:ro
     environment:
       DATABASE_URL: postgresql://infraguard:infraguard@postgres:5432/infraguard
+      IEP1_MODE: ${IEP1_MODE:-stub}
+      IEP1_YOLO_WEIGHTS: /app/models/infraguard_v1.pt
+      IEP1_STATE_WEIGHTS: /app/models/tl_state_resnet18.pt
+      IEP1_CAMERA_CONFIG: /app/configs/camera_config.json
+      IEP1_TRACKER: ${IEP1_TRACKER:-bytetrack}
+      IEP1_CONF: "0.35"
+      IEP1_IOU: "0.45"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s

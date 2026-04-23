@@ -3,6 +3,7 @@
 asyncpg pool is mocked so no real Postgres is required.
 """
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import main
@@ -92,3 +93,19 @@ def test_process_missing_run_id() -> None:
     """POST /process without run_id returns 422 validation error."""
     response = client.post("/process", json={"video_path": "video.mp4"})
     assert response.status_code == 422
+
+
+def test_process_real_mode_import_failure_falls_back_to_stub() -> None:
+    """Real-mode import failure must fall back to stub — service never returns 500."""
+    mock_real = AsyncMock(side_effect=ImportError("ultralytics not installed"))
+    with patch.dict(os.environ, {"IEP1_MODE": "real"}):
+        with patch.object(main, "_run_real_pipeline", mock_real):
+            with patch.object(main, "_pool", None):
+                response = client.post(
+                    "/process",
+                    json={"video_path": "test.mp4", "run_id": "run-fallback-test"},
+                )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["events"]) == 2

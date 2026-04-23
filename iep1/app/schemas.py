@@ -5,6 +5,8 @@ Do not change field names or types once deployed — create a versioned
 endpoint instead and document the decision in docs/tradeoffs.md.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -23,6 +25,7 @@ class ViolationEvent(BaseModel):
     location: dict[str, float]  # {"lat": float, "lon": float}
     violation_type: str
     severity: str  # "low" | "medium" | "high"
+    camera_id: Optional[str] = None  # populated by real pipeline; NULL in stub mode
 
 
 class ProcessResponse(BaseModel):

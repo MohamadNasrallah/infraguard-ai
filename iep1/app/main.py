@@ -8,6 +8,7 @@ Endpoints:
   GET  /health   → liveness probe
 """
 
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -17,8 +18,9 @@ from typing import Any
 import asyncpg
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
-
 from schemas import ProcessRequest, ProcessResponse, ViolationEvent
+
+log = logging.getLogger(__name__)
 
 DATABASE_URL: str = os.getenv("DATABASE_URL", "")
 
@@ -57,8 +59,9 @@ async def _persist_events(run_id: str, events: list[ViolationEvent]) -> None:
             await conn.execute(
                 """
                 INSERT INTO events
-                    (id, run_id, event_id, ts, lat, lon, violation_type, severity)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    (id, run_id, event_id, ts, lat, lon, violation_type, severity,
+                     camera_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 ON CONFLICT DO NOTHING
                 """,
                 str(uuid.uuid4()),
@@ -71,7 +74,86 @@ async def _persist_events(run_id: str, events: list[ViolationEvent]) -> None:
                 event.location["lon"],
                 event.violation_type,
                 event.severity,
+                event.camera_id,
             )
+
+
+def _conf_to_severity(conf: float) -> str:
+    if conf >= 0.85:
+        return "high"
+    if conf >= 0.65:
+        return "medium"
+    return "low"
+
+
+async def _run_real_pipeline(
+    video_path: str,
+    run_id: str,
+    camera_config_path: str,
+    pool: asyncpg.Pool | None,
+) -> list[ViolationEvent]:
+    """Lazy-import pipeline, run inference, batch-insert to DB, return events.
+
+    Raises on any failure so the caller can fall back to stub.
+    """
+    try:
+        import pipeline as _pipeline  # noqa: PLC0415 — intentional lazy import
+    except ImportError as exc:
+        log.warning(
+            "[IEP1] pipeline import failed (%s) — caller will fall back to stub.", exc
+        )
+        raise
+
+    raw_events = list(_pipeline.process_video(video_path, camera_config_path, run_id))
+
+    violation_events: list[ViolationEvent] = [
+        ViolationEvent(
+            event_id=(
+                f"{run_id[:8]}-f{ev['frame_idx']:06d}"
+                f"-t{ev.get('track_id') or 'x'}"
+            ),
+            timestamp=datetime.fromtimestamp(
+                float(ev["timestamp"]), tz=timezone.utc
+            ).isoformat(),
+            location={
+                "lat": ev.get("latitude") or 0.0,
+                "lon": ev.get("longitude") or 0.0,
+            },
+            violation_type=ev["class_name"],
+            severity=_conf_to_severity(float(ev.get("confidence", 0.5))),
+            camera_id=ev.get("camera_id"),
+        )
+        for ev in raw_events
+    ]
+
+    if pool is not None and violation_events:
+        rows = [
+            (
+                str(uuid.uuid4()),
+                run_id,
+                ev.event_id,
+                datetime.fromisoformat(ev.timestamp),
+                ev.location["lat"],
+                ev.location["lon"],
+                ev.violation_type,
+                ev.severity,
+                ev.camera_id,
+            )
+            for ev in violation_events
+        ]
+        async with pool.acquire() as conn:
+            await conn.executemany(
+                """
+                INSERT INTO events
+                    (id, run_id, event_id, ts, lat, lon, violation_type, severity,
+                     camera_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT DO NOTHING
+                """,
+                rows,
+            )
+
+    return violation_events
 
 
 @app.get("/health")
@@ -84,9 +166,9 @@ def health() -> dict[str, str]:
 async def process_video(body: ProcessRequest) -> Any:
     """Detect violations in a video and persist them to PostgreSQL.
 
-    Stub: returns two realistic fake ViolationEvent objects.
-    Real YOLO + DeepSORT logic will be slotted in during Phase 4 without
-    changing this API contract.
+    Stub (default): returns two realistic fake ViolationEvent objects.
+    Real (IEP1_MODE=real): calls pipeline.process_video() with lazy imports;
+    falls back to stub on any failure so the service never returns 500.
 
     Args:
         body: Contains video_path and run_id.
@@ -94,6 +176,25 @@ async def process_video(body: ProcessRequest) -> Any:
     Returns:
         ProcessResponse with run_id and list of violation events.
     """
+    mode = os.getenv("IEP1_MODE", "stub").lower()
+    if mode not in {"stub", "real"}:
+        log.warning("[IEP1] Unknown IEP1_MODE=%s — falling back to stub.", mode)
+        mode = "stub"
+
+    if mode == "real":
+        camera_config = os.getenv(
+            "IEP1_CAMERA_CONFIG", "/app/configs/camera_config.json"
+        )
+        try:
+            events = await _run_real_pipeline(
+                body.video_path, body.run_id, camera_config, _pool
+            )
+            return ProcessResponse(run_id=body.run_id, events=events)
+        except Exception as exc:  # noqa: BLE001
+            log.exception(
+                "[IEP1] Real pipeline failed (%s) — falling back to stub.", exc
+            )
+
     stub_events = [
         ViolationEvent(
             event_id=f"{body.run_id[:8]}-evt-001",

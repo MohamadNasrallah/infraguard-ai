@@ -78,3 +78,48 @@ P95 latency, and error rate scraped from each service's `/metrics`
 endpoint. The combination — one image per model service, MLflow for
 offline lifecycle, Grafana for online behavior — covers scalability,
 deployment, and observability without container sprawl.
+
+---
+
+## IEP1 — Wrong-Way Detection: Rule-based vs. Classifier Approach
+
+**Decision: YOLO + DeepSORT + heading rule. No separate wrong-way classifier trained.**
+
+**Approach considered and rejected: train a classifier on labeled wrong-way images.**
+Several Roboflow datasets exist for wrong-way detection (e.g., Samias ML Space, 608 images).
+This approach was rejected for two reasons. First, a per-frame classifier cannot detect
+wrong-way driving by design — the phenomenon is temporal (direction of movement across
+frames), not spatial (appearance in a single frame). Any dataset of static wrong-way images
+is labeling an ambiguous signal. Second, the available datasets were found to be heavily
+duplicated clones of each other, making evaluation unreliable.
+
+**Approach chosen: trajectory-based heading rule on top of DeepSORT tracks.**
+DeepSORT assigns each detected vehicle a stable `track_id` and produces a trajectory
+(sequence of bounding box centroids across frames). The heading rule computes a smoothed
+displacement vector over a rolling window of frames and compares it against a configured
+expected lane direction (`expected_heading_deg`) per camera zone. A vehicle whose heading
+deviates by more than `wrong_way_threshold_deg` (default 120°) is flagged.
+
+This is the standard approach in the academic literature on YOLO+DeepSORT traffic
+violation systems. The ML work is in YOLO (spatial feature extraction per frame) and
+DeepSORT (Kalman-filter trajectory association across frames). The heading rule is the
+decision boundary applied to those ML-produced features — equivalent in role to a threshold
+on a classifier's output score.
+
+**Tradeoffs accepted:**
+- Per-camera zone configuration (`expected_heading_deg`) must be set manually for each
+  deployment. This is a one-time setup cost per camera, documented in `camera_config.json`.
+- Wrong-way detection quality is bounded by DeepSORT tracking quality. If a track is lost
+  mid-frame or the vehicle appears for fewer than `min_track_frames` frames, no heading is
+  computed and the vehicle is not evaluated. Short appearances at frame edges are silently
+  skipped — this is a known limitation documented in the demo script.
+- The approach does not generalize automatically to novel camera geometries. A misconfigured
+  `expected_heading_deg` will produce all false positives or all false negatives on that
+  zone. Mitigation: validate each zone config against a known-clean clip before deployment.
+
+**Why this is the stronger engineering choice:**
+A trained classifier would require retraining every time the pipeline is deployed to a new
+road segment or camera angle. The heading rule requires only a config update. For a
+production road-safety system, maintainability and interpretability (an operator can read
+`expected_heading_deg: 45` and understand exactly what it means) outweigh the superficial
+appeal of an end-to-end neural approach for a phenomenon that is not frame-level.

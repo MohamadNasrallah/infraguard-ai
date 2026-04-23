@@ -17,7 +17,7 @@ jobs:
         run: docker compose -f infra/docker-compose.yml up -d --build
 
       - name: Wait for services to be ready
-        run: sleep 15
+        run: sleep 30
 
       - name: Health check — all services must return 200 with status ok
         run: |
